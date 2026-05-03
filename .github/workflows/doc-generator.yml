@@ -61,7 +61,7 @@ jobs:
         id: changes
         shell: bash
         run: |
-          BASE_BRANCH="${{ steps.vars.outputs.BASE_BRANCH }}"
+          BASE_BRANCH=${{ steps.vars.outputs.BASE_BRANCH }}
 
           git fetch origin "${BASE_BRANCH}" --depth=1 || true
 
@@ -92,7 +92,7 @@ jobs:
         id: branch
         shell: bash
         run: |
-          SOURCE_BRANCH="${{ steps.vars.outputs.SOURCE_BRANCH }}"
+          SOURCE_BRANCH=${{ steps.vars.outputs.SOURCE_BRANCH }}
           SAFE_SOURCE_BRANCH="${SOURCE_BRANCH//\//-}"
           DOC_BRANCH="ai-docs/${SAFE_SOURCE_BRANCH}"
 
