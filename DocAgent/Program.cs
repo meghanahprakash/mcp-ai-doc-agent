@@ -11,7 +11,7 @@ try
 
     var provider = argsDict.ContainsKey("--provider")
         ? argsDict["--provider"]
-        : "ollama";
+        : "smart";
 
     var outputDir = argsDict.ContainsKey("--output-dir")
         ? argsDict["--output-dir"]

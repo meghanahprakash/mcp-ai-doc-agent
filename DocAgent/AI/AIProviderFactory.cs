@@ -10,13 +10,14 @@ namespace DocAgent.AI
         return provider switch
         {
             "ollama" => new OllamaProvider(),
+            "smart" => new SmartProvider(),
 
             "openai" => new OpenAIProvider(
                 Environment.GetEnvironmentVariable("OPENAI_API_KEY")
                     ?? throw new InvalidOperationException("OPENAI_API_KEY environment variable is not set.")
             ),
 
-            _ => new OllamaProvider() // default safe fallback
+            _ => new SmartProvider()
         };
     }
 }
