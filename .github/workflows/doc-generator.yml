@@ -110,20 +110,15 @@ jobs:
       - name: Get changed files
         id: changes
         run: |
-          if git show-ref --verify --quiet refs/remotes/origin/main; then
-            BASE="origin/main"
-          elif git show-ref --verify --quiet refs/remotes/origin/master; then
-            BASE="origin/master"
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+
+          echo "Base: $BASE"
+          echo "Head: $HEAD"
+
+          if [ -n "$BASE" ]; then
+            FILES=$(git diff --name-only "$BASE" "$HEAD")
           else
-            echo "⚠️ fallback"
-            BASE="HEAD~1"
-          fi
-
-          echo "🔍 Comparing HEAD → $BASE"
-
-          FILES=$(git diff --name-only $BASE...HEAD || true)
-
-          if [ -z "$FILES" ]; then
             FILES=$(git show --name-only --pretty="" HEAD)
           fi
 
