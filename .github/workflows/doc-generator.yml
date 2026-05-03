@@ -36,10 +36,20 @@ jobs:
           echo "BASE_BRANCH=${BASE_BRANCH}" >> "$GITHUB_OUTPUT"
           echo "SOURCE_BRANCH=${SOURCE_BRANCH}" >> "$GITHUB_OUTPUT"
 
-      - name: Clone DocAgent
+      - name: Resolve DocAgent source
+        id: agent_source
         shell: bash
         run: |
-          git clone https://github.com/meghanahprakash/mcp-ai-doc-agent.git ai-doc-agent
+          if [ -d "DocAgent" ]; then
+            AGENT_ROOT="."
+            echo "Using local DocAgent source"
+          else
+            git clone https://github.com/meghanahprakash/mcp-ai-doc-agent.git ai-doc-agent
+            AGENT_ROOT="ai-doc-agent"
+            echo "Using cloned DocAgent source"
+          fi
+
+          echo "AGENT_ROOT=${AGENT_ROOT}" >> "$GITHUB_OUTPUT"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -47,7 +57,7 @@ jobs:
           dotnet-version: 9.0.x
 
       - name: Restore dependencies
-        working-directory: ai-doc-agent/DocAgent
+        working-directory: ${{ steps.agent_source.outputs.AGENT_ROOT }}/DocAgent
         shell: bash
         run: |
           cat > NuGet.Config << 'EOF'
@@ -83,7 +93,7 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Run Doc Agent
-        working-directory: ai-doc-agent
+        working-directory: ${{ steps.agent_source.outputs.AGENT_ROOT }}
         shell: bash
         run: |
           dotnet run --tl:off --no-restore \
@@ -110,7 +120,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p docs
-          cp -r ai-doc-agent/docs/* docs/
+          cp -r "${{ steps.agent_source.outputs.AGENT_ROOT }}/docs/." docs/
 
       - name: Commit docs
         id: commit_docs
