@@ -8,119 +8,131 @@ on:
         type: string
         default: ollama
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   generate-docs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout caller repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    # ✅ Checkout target repo (PR branch)
-    - name: Checkout Caller Repo
-      uses: actions/checkout@v4
+      - name: Get branch details
+        id: vars
+        shell: bash
+        run: |
+          BASE_BRANCH="${GITHUB_BASE_REF:-main}"
+          SOURCE_BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
 
-    # ✅ Extract branch info
-    - name: Get branch details
-      id: vars
-      run: |
-        echo "BASE_BRANCH=${GITHUB_BASE_REF:-main}" >> $GITHUB_OUTPUT
-        echo "SOURCE_BRANCH=${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}" >> $GITHUB_OUTPUT
+          echo "BASE_BRANCH=${BASE_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "SOURCE_BRANCH=${SOURCE_BRANCH}" >> "$GITHUB_OUTPUT"
 
-    # ✅ Clone MCP repo
-    - name: Clone DocAgent
-      run: |
-        git clone https://github.com/<your-org>/ai-doc-agent.git
+      - name: Clone DocAgent
+        shell: bash
+        run: |
+          git clone https://github.com/meghanahprakash/mcp-ai-doc-agent.git ai-doc-agent
 
-    # ✅ Setup .NET
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 8.0.x
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
 
-    # ✅ Restore dependencies (isolated)
-    - name: Restore Dependencies
-      working-directory: ai-doc-agent/DocAgent
-      run: |
-        cat > NuGet.Config <<EOF
-        <configuration>
-          <packageSources>
-            <clear />
-            <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
-          </packageSources>
-        </configuration>
-        EOF
+      - name: Restore dependencies
+        working-directory: ai-doc-agent/DocAgent
+        shell: bash
+        run: |
+          cat > NuGet.Config << 'EOF'
+          <configuration>
+            <packageSources>
+              <clear />
+              <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+            </packageSources>
+          </configuration>
+          EOF
 
-        dotnet restore --configfile NuGet.Config
+          dotnet restore --tl:off --configfile NuGet.Config
 
-    # Get Changed files
-    - name: Get changed files
-      id: changes
-      run: |
-        git fetch origin ${{ github.base_ref }}
+      - name: Get changed files
+        id: changes
+        shell: bash
+        run: |
+          BASE_BRANCH="${{ steps.vars.outputs.BASE_BRANCH }}"
 
-        CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          git fetch origin "${BASE_BRANCH}" --depth=1 || true
 
-        echo "Changed files:"
-        echo "$CHANGED_FILES"
+          if git rev-parse --verify "origin/${BASE_BRANCH}" >/dev/null 2>&1; then
+            CHANGED_FILES="$(git diff --name-only "origin/${BASE_BRANCH}...HEAD")"
+          else
+            CHANGED_FILES="$(git diff --name-only HEAD~1...HEAD || true)"
+          fi
 
-        echo "FILES<<EOF" >> $GITHUB_OUTPUT
-        echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+          echo "Changed files:"
+          echo "${CHANGED_FILES}"
 
-    # ✅ Run MCP agent
-    - name: Run Doc Agent
-      working-directory: ai-doc-agent
-      run: |      
-        dotnet run --no-restore \
-              --project DocAgent/DocAgent.csproj -- \
-              --repo "$GITHUB_WORKSPACE" \
-              --provider "${{ inputs.provider }}" \
-              --files "${{ steps.changes.outputs.FILES }}"
+          echo "FILES<<EOF" >> "$GITHUB_OUTPUT"
+          echo "${CHANGED_FILES}" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
+      - name: Run Doc Agent
+        working-directory: ai-doc-agent
+        shell: bash
+        run: |
+          dotnet run --tl:off --no-restore \
+            --project DocAgent/DocAgent.csproj -- \
+            --repo "$GITHUB_WORKSPACE" \
+            --provider "${{ inputs.provider }}" \
+            --files "${{ steps.changes.outputs.FILES }}"
 
-    # ✅ Create docs branch
-    - name: Create Docs Branch
-      run: |
-        DOC_BRANCH="ai-docs/${{ steps.vars.outputs.SOURCE_BRANCH }}"
+      - name: Create docs branch
+        id: branch
+        shell: bash
+        run: |
+          SOURCE_BRANCH="${{ steps.vars.outputs.SOURCE_BRANCH }}"
+          SAFE_SOURCE_BRANCH="${SOURCE_BRANCH//\//-}"
+          DOC_BRANCH="ai-docs/${SAFE_SOURCE_BRANCH}"
 
-        git config user.name "github-actions"
-        git config user.email "actions@github.com"
+          echo "DOC_BRANCH=${DOC_BRANCH}" >> "$GITHUB_OUTPUT"
 
-        git checkout -b "$DOC_BRANCH"
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git checkout -B "${DOC_BRANCH}"
 
-    # ✅ Copy generated docs
-    - name: Copy Docs
-      run: |
-        mkdir -p docs
-        cp -r ai-doc-agent/docs/* docs/
+      - name: Copy docs
+        shell: bash
+        run: |
+          mkdir -p docs
+          cp -r ai-doc-agent/docs/* docs/
 
-    # ✅ Commit changes
-    - name: Commit Docs
-      run: |
-        DOC_BRANCH="ai-docs/${{ steps.vars.outputs.SOURCE_BRANCH }}"
+      - name: Commit docs
+        id: commit_docs
+        shell: bash
+        run: |
+          git add docs/
 
-        git add docs/
+          if git diff --cached --quiet; then
+            echo "No doc changes"
+            echo "no_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "AI-generated documentation update"
+            git push -u origin "${{ steps.branch.outputs.DOC_BRANCH }}"
+            echo "no_changes=false" >> "$GITHUB_OUTPUT"
+          fi
 
-        if git diff --cached --quiet; then
-          echo "No doc changes"
-          echo "NO_CHANGES=true" >> $GITHUB_ENV
-        else
-          git commit -m "🤖 AI-generated documentation update"
-          git push origin "$DOC_BRANCH"
-          echo "NO_CHANGES=false" >> $GITHUB_ENV
-        fi
+      - name: Create Pull Request
+        if: steps.commit_docs.outputs.no_changes == 'false'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ steps.branch.outputs.DOC_BRANCH }}
+          base: ${{ steps.vars.outputs.SOURCE_BRANCH }}
+          title: AI Generated Docs for ${{ steps.vars.outputs.SOURCE_BRANCH }}
+          body: |
+            This PR contains automatically generated documentation.
 
-    # ✅ Create PR ONLY if changes exist
-    - name: Create Pull Request
-      if: env.NO_CHANGES == 'false'
-      uses: peter-evans/create-pull-request@v6
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        branch: ai-docs/${{ steps.vars.outputs.SOURCE_BRANCH }}
-        title: "🤖 AI Generated Docs for ${{ steps.vars.outputs.SOURCE_BRANCH }}"
-        body: |
-          This PR contains automatically generated documentation.
-
-          ✅ Generated by AI Doc Agent  
-          ✅ Based on latest changes  
-
-        base: ${{ steps.vars.outputs.SOURCE_BRANCH }}
+            Generated by AI Doc Agent
+            Based on latest changes
