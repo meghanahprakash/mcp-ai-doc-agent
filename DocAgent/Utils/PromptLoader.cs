@@ -4,10 +4,17 @@ namespace DocAgent.Utils
     {
         public static string Load(string name)
         {
+            // Try relative to current directory first
             var path = Path.Combine("Prompts", $"{name}.txt");
+            
+            // If not found, try relative to application base directory
+            if (!File.Exists(path))
+            {
+                path = Path.Combine(AppContext.BaseDirectory, "Prompts", $"{name}.txt");
+            }
 
             if (!File.Exists(path))
-                throw new Exception($"Prompt not found: {name}");
+                throw new Exception($"Prompt not found: {name}. Searched in: {Path.Combine("Prompts", $"{name}.txt")} and {path}");
 
             return File.ReadAllText(path);
         }
