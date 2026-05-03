@@ -6,7 +6,7 @@ namespace DocAgent.Services
 {
 public class AgentOrchestrator
 {
-    public async Task Run(string repoPath, string[] changedFiles)
+    public async Task Run(string repoPath, string[] changedFiles, string outputDir)
     {
         var resolvedRepoPath = repoPath;
 
@@ -61,10 +61,15 @@ public class AgentOrchestrator
         var analysis = await analyzer.Analyze(string.Join("\n\n", fileContents));
         var docs = await writer.Generate(analysis);
 
-        Directory.CreateDirectory("docs");
-        File.WriteAllText("docs/README.md", docs);
+        var resolvedOutputDir = string.IsNullOrWhiteSpace(outputDir)
+            ? Path.Combine(resolvedRepoPath, "docs")
+            : outputDir;
 
-        Console.WriteLine("✅ Documentation generated!");
+        Directory.CreateDirectory(resolvedOutputDir);
+        var outputFile = Path.Combine(resolvedOutputDir, "README.md");
+        File.WriteAllText(outputFile, docs);
+
+        Console.WriteLine($"✅ Documentation generated at: {outputFile}");
     }
 
 }

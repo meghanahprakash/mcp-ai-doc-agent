@@ -28,6 +28,7 @@ jobs:
       - name: Checkout caller repo
         uses: actions/checkout@v4
         with:
+          token: ${{ secrets.GITHUB_TOKEN || github.token }}
           repository: ${{ inputs.caller_repository != '' && inputs.caller_repository || github.repository }}
           ref: ${{ inputs.caller_ref != '' && inputs.caller_ref || github.ref }}
           fetch-depth: 0
@@ -53,6 +54,7 @@ jobs:
       - name: Checkout DocAgent source
         uses: actions/checkout@v4
         with:
+          token: ${{ secrets.GITHUB_TOKEN || github.token }}
           repository: meghanahprakash/mcp-ai-doc-agent
           ref: main
           fetch-depth: 1
@@ -161,7 +163,8 @@ jobs:
             --project DocAgent/DocAgent.csproj -- \
             --repo "$GITHUB_WORKSPACE/caller-repo" \
             --provider "${{ inputs.provider }}" \
-            --files "${{ steps.changes.outputs.FILES }}"
+            --files "${{ steps.changes.outputs.FILES }}" \
+            --output-dir "$GITHUB_WORKSPACE/caller-repo/docs"
 
       - name: Create docs branch
         id: branch
@@ -177,12 +180,6 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git checkout -B "${DOC_BRANCH}"
-
-      - name: Copy docs
-        shell: bash
-        run: |
-          mkdir -p caller-repo/docs
-          cp -r "${{ steps.agent_source.outputs.AGENT_ROOT }}/docs/." caller-repo/docs/
 
       - name: Commit docs
         id: commit_docs

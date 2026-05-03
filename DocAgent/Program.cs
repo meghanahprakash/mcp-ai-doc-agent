@@ -13,6 +13,10 @@ try
         ? argsDict["--provider"]
         : "ollama";
 
+    var outputDir = argsDict.ContainsKey("--output-dir")
+        ? argsDict["--output-dir"]
+        : Path.Combine(repoPath, "docs");
+
     // ✅ ✅ HANDLE CHANGED FILES SAFELY
     var changedFiles = argsDict.ContainsKey("--files")
         ? argsDict["--files"]
@@ -24,6 +28,7 @@ try
 
     Console.WriteLine($"📂 Repo: {repoPath}");
     Console.WriteLine($"🤖 Provider: {provider}");
+    Console.WriteLine($"📝 Output Dir: {outputDir}");
 
     Console.WriteLine("📄 Changed Files:");
     foreach (var file in changedFiles)
@@ -36,7 +41,7 @@ try
     var orchestrator = new AgentOrchestrator();
 
     // ✅ PASS FILES INTO AGENT
-    await orchestrator.Run(repoPath, changedFiles);
+    await orchestrator.Run(repoPath, changedFiles, outputDir);
 
     Console.WriteLine("✅ Done!");
 }
