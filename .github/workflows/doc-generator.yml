@@ -112,41 +112,39 @@ jobs:
         working-directory: caller-repo
         shell: bash
         run: |
+          set -x
+
           BASE_BRANCH="${{ steps.vars.outputs.BASE_BRANCH }}"
-          export GIT_TERMINAL_PROMPT=0
-          export GCM_INTERACTIVE=Never
 
-          # Keep this step fully local to avoid hanging on remote/network operations.
-          if git rev-parse --verify "${BASE_BRANCH}" >/dev/null 2>&1; then
-            BASE_REF="${BASE_BRANCH}"
-          elif git rev-parse --verify "origin/${BASE_BRANCH}" >/dev/null 2>&1; then
-            BASE_REF="origin/${BASE_BRANCH}"
+          echo "Base branch: $BASE_BRANCH"
+
+          # ✅ Ensure base branch exists locally
+          git fetch origin "$BASE_BRANCH":"refs/remotes/origin/$BASE_BRANCH" || true
+
+          # ✅ Check if base exists
+          if git rev-parse --verify "origin/$BASE_BRANCH" >/dev/null 2>&1; then
+            FILES=$(git diff --name-only origin/$BASE_BRANCH...HEAD)
+          elif git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+            FILES=$(git diff --name-only HEAD~1 HEAD)
           else
-            BASE_REF=""
+            FILES=$(git ls-files)
           fi
 
-          if [ -n "${BASE_REF}" ]; then
-            MERGE_BASE="$(git merge-base "${BASE_REF}" HEAD 2>/dev/null || true)"
-            if [ -n "${MERGE_BASE}" ]; then
-              CHANGED_FILES="$(git diff --name-only "${MERGE_BASE}"...HEAD || true)"
-            else
-              CHANGED_FILES="$(git diff --name-only "${BASE_REF}"...HEAD || true)"
-            fi
-          else
-            echo "Local base branch not available. Using commit-range fallback."
-            if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
-              CHANGED_FILES="$(git diff --name-only HEAD~1...HEAD || true)"
-            else
-              CHANGED_FILES="$(git show --pretty="" --name-only HEAD | sed '/^$/d' || true)"
-            fi
-          fi
+          echo "Before filtering:"
+          echo "$FILES"
 
-          echo "Changed files:"
-          echo "${CHANGED_FILES}"
+          # ✅ FILTER ONLY CODE FILES
+          FILTERED_FILES=$(echo "$FILES" | grep -E '\.(cs|js|ts|py|java|kt|go|rs|cpp|c|h|json|yaml|yml|md)$' | \
+            grep -v -E '(node_modules|bin/|obj/|dist/|build/|\.git/|\.github/|coverage/|logs?)' || true)
 
-          echo "FILES<<EOF" >> "$GITHUB_OUTPUT"
-          echo "${CHANGED_FILES}" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo ""
+          echo "After filtering:"
+          echo "$FILTERED_FILES"
+
+          # ✅ Output
+          echo "FILES<<EOF" >> $GITHUB_OUTPUT
+          echo "$FILTERED_FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Run Doc Agent
         working-directory: ${{ steps.agent_source.outputs.AGENT_ROOT }}
