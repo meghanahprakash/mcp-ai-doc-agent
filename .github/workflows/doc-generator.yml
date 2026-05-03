@@ -107,12 +107,20 @@ jobs:
         shell: bash
         run: |
           BASE_BRANCH="${{ steps.vars.outputs.BASE_BRANCH }}"
+          export GIT_TERMINAL_PROMPT=0
+          export GCM_INTERACTIVE=Never
 
-          git fetch origin "${BASE_BRANCH}" --depth=1 || true
+          FETCH_OK=false
+          if git ls-remote --exit-code --heads origin "${BASE_BRANCH}" >/dev/null 2>&1; then
+            if git fetch --no-tags --depth=1 origin "${BASE_BRANCH}" >/dev/null 2>&1; then
+              FETCH_OK=true
+            fi
+          fi
 
-          if git rev-parse --verify "origin/${BASE_BRANCH}" >/dev/null 2>&1; then
+          if [ "${FETCH_OK}" = "true" ] && git rev-parse --verify "origin/${BASE_BRANCH}" >/dev/null 2>&1; then
             CHANGED_FILES="$(git diff --name-only "origin/${BASE_BRANCH}...HEAD")"
           else
+            echo "Remote base branch not available. Using local diff fallback."
             CHANGED_FILES="$(git diff --name-only HEAD~1...HEAD || true)"
           fi
 
