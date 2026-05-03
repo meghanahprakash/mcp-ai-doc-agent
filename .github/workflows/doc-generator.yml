@@ -50,14 +50,20 @@ jobs:
           echo "BASE_BRANCH=${BASE_BRANCH}" >> "$GITHUB_OUTPUT"
           echo "SOURCE_BRANCH=${SOURCE_BRANCH}" >> "$GITHUB_OUTPUT"
 
+      - name: Checkout DocAgent source
+        uses: actions/checkout@v4
+        with:
+          repository: meghanahprakash/mcp-ai-doc-agent
+          ref: main
+          fetch-depth: 1
+          path: ai-doc-agent
+
       - name: Resolve DocAgent source
         id: agent_source
         shell: bash
         run: |
-          git clone https://github.com/meghanahprakash/mcp-ai-doc-agent.git ai-doc-agent
           AGENT_ROOT="ai-doc-agent"
-          echo "Using cloned DocAgent source"
-
+          echo "Using checked out DocAgent source"
           echo "AGENT_ROOT=${AGENT_ROOT}" >> "$GITHUB_OUTPUT"
 
       - name: Ensure download tools
