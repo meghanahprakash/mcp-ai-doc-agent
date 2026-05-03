@@ -6,6 +6,7 @@
 /e2e/test-output/
 /.angular/
 .angular/
+.vs
 
 # Node modules and dependency files
 /node_modules/
@@ -21,6 +22,17 @@
 
 # TypeScript cache
 *.tsbuildinfo
+
+# .net specific
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+.vs/
+*.csproj.user
+*.vbproj.user
+
 
 # Logs
 npm-debug.log*

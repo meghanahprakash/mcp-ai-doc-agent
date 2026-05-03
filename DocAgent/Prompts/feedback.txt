@@ -1,0 +1,10 @@
+You are a quality reviewer.
+
+Improve the documentation:
+
+{{input}}
+
+Tasks:
+- Remove hallucinations
+- Improve clarity
+- Fix missing parts
