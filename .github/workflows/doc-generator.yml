@@ -7,6 +7,14 @@ on:
         required: false
         type: string
         default: ollama
+      caller_repository:
+        required: false
+        type: string
+        default: ""
+      caller_ref:
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -20,14 +28,20 @@ jobs:
       - name: Checkout caller repo
         uses: actions/checkout@v4
         with:
+          repository: ${{ inputs.caller_repository != '' && inputs.caller_repository || github.repository }}
+          ref: ${{ inputs.caller_ref != '' && inputs.caller_ref || github.ref }}
           fetch-depth: 0
+          path: caller-repo
 
       - name: Get branch details
         id: vars
         shell: bash
         run: |
           BASE_BRANCH="${GITHUB_BASE_REF:-main}"
-          if [ -z "$GITHUB_HEAD_REF" ]; then
+          if [ -n "${{ inputs.caller_ref }}" ]; then
+            SOURCE_BRANCH="${{ inputs.caller_ref }}"
+            SOURCE_BRANCH="${SOURCE_BRANCH#refs/heads/}"
+          elif [ -z "$GITHUB_HEAD_REF" ]; then
             SOURCE_BRANCH="${GITHUB_REF_NAME}"
           else
             SOURCE_BRANCH="${GITHUB_HEAD_REF}"
@@ -40,14 +54,9 @@ jobs:
         id: agent_source
         shell: bash
         run: |
-          if [ -d "DocAgent" ]; then
-            AGENT_ROOT="."
-            echo "Using local DocAgent source"
-          else
-            git clone https://github.com/meghanahprakash/mcp-ai-doc-agent.git ai-doc-agent
-            AGENT_ROOT="ai-doc-agent"
-            echo "Using cloned DocAgent source"
-          fi
+          git clone https://github.com/meghanahprakash/mcp-ai-doc-agent.git ai-doc-agent
+          AGENT_ROOT="ai-doc-agent"
+          echo "Using cloned DocAgent source"
 
           echo "AGENT_ROOT=${AGENT_ROOT}" >> "$GITHUB_OUTPUT"
 
@@ -94,6 +103,7 @@ jobs:
 
       - name: Get changed files
         id: changes
+        working-directory: caller-repo
         shell: bash
         run: |
           BASE_BRANCH="${{ steps.vars.outputs.BASE_BRANCH }}"
@@ -119,12 +129,13 @@ jobs:
         run: |
           dotnet run --tl:off --no-restore \
             --project DocAgent/DocAgent.csproj -- \
-            --repo "$GITHUB_WORKSPACE" \
+            --repo "$GITHUB_WORKSPACE/caller-repo" \
             --provider "${{ inputs.provider }}" \
             --files "${{ steps.changes.outputs.FILES }}"
 
       - name: Create docs branch
         id: branch
+        working-directory: caller-repo
         shell: bash
         run: |
           SOURCE_BRANCH="${{ steps.vars.outputs.SOURCE_BRANCH }}"
@@ -140,11 +151,12 @@ jobs:
       - name: Copy docs
         shell: bash
         run: |
-          mkdir -p docs
-          cp -r "${{ steps.agent_source.outputs.AGENT_ROOT }}/docs/." docs/
+          mkdir -p caller-repo/docs
+          cp -r "${{ steps.agent_source.outputs.AGENT_ROOT }}/docs/." caller-repo/docs/
 
       - name: Commit docs
         id: commit_docs
+        working-directory: caller-repo
         shell: bash
         run: |
           git add docs/
@@ -162,6 +174,7 @@ jobs:
         if: steps.commit_docs.outputs.no_changes == 'false'
         uses: peter-evans/create-pull-request@v6
         with:
+          path: caller-repo
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ steps.branch.outputs.DOC_BRANCH }}
           base: ${{ steps.vars.outputs.SOURCE_BRANCH }}
