@@ -113,13 +113,30 @@ jobs:
         shell: bash
         run: |
           BASE_BRANCH="${{ steps.vars.outputs.BASE_BRANCH }}"
+          GIT_REMOTE_TIMEOUT_SEC="${GIT_REMOTE_TIMEOUT_SEC:-20}"
           export GIT_TERMINAL_PROMPT=0
           export GCM_INTERACTIVE=Never
+          export GIT_HTTP_LOW_SPEED_LIMIT=1
+          export GIT_HTTP_LOW_SPEED_TIME="${GIT_REMOTE_TIMEOUT_SEC}"
+
+          run_with_timeout() {
+            if command -v timeout >/dev/null 2>&1; then
+              timeout "${GIT_REMOTE_TIMEOUT_SEC}s" "$@"
+            else
+              "$@"
+            fi
+          }
 
           FETCH_OK=false
-          if git ls-remote --exit-code --heads origin "${BASE_BRANCH}" >/dev/null 2>&1; then
-            if git fetch --no-tags --depth=1 origin "${BASE_BRANCH}" >/dev/null 2>&1; then
-              FETCH_OK=true
+          if [ "${ACT:-}" = "true" ]; then
+            echo "Running under act. Skipping remote base branch lookup and using local diff fallback."
+          else
+            if run_with_timeout git ls-remote --exit-code --heads origin "${BASE_BRANCH}" >/dev/null 2>&1; then
+              if run_with_timeout git fetch --no-tags --depth=1 origin "${BASE_BRANCH}" >/dev/null 2>&1; then
+                FETCH_OK=true
+              fi
+            else
+              echo "Remote base lookup timed out or failed. Using local diff fallback."
             fi
           fi
 
