@@ -106,6 +106,23 @@ jobs:
           EOF
 
           dotnet restore --tl:off --configfile NuGet.Config
+                
+      - name: Debug step
+        working-directory: caller-repo
+        run: |
+          echo "STEP 1"
+          pwd
+
+          echo "STEP 2"
+          ls -la
+
+          echo "STEP 3"
+          git status
+
+          echo "STEP 4"
+          git ls-files
+
+          echo "STEP 5 DONE"
 
       - name: Get changed files
         id: changes
