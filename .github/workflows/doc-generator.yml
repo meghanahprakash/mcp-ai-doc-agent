@@ -112,39 +112,34 @@ jobs:
         working-directory: caller-repo
         shell: bash
         run: |
-          set -x
+          set -euo pipefail
 
-          BASE_BRANCH="${{ steps.vars.outputs.BASE_BRANCH }}"
+          echo "🔍 Detecting changed files (local-safe)..."
 
-          echo "Base branch: $BASE_BRANCH"
-
-          # ✅ Ensure base branch exists locally
-          git fetch origin "$BASE_BRANCH":"refs/remotes/origin/$BASE_BRANCH" || true
-
-          # ✅ Check if base exists
-          if git rev-parse --verify "origin/$BASE_BRANCH" >/dev/null 2>&1; then
-            FILES=$(git diff --name-only origin/$BASE_BRANCH...HEAD)
-          elif git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+          # ✅ Never use remote branches in ACT
+          if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+            echo "Using last commit diff"
             FILES=$(git diff --name-only HEAD~1 HEAD)
           else
+            echo "First commit → using all files"
             FILES=$(git ls-files)
           fi
 
-          echo "Before filtering:"
+          echo "Raw files:"
           echo "$FILES"
 
-          # ✅ FILTER ONLY CODE FILES
-          FILTERED_FILES=$(echo "$FILES" | grep -E '\.(cs|js|ts|py|java|kt|go|rs|cpp|c|h|json|yaml|yml|md)$' | \
-            grep -v -E '(node_modules|bin/|obj/|dist/|build/|\.git/|\.github/|coverage/|logs?)' || true)
+          # ✅ Filter ONLY code files
+          FILTERED=$(echo "$FILES" | grep -E '\.(cs|js|ts|py|java|json|yaml|yml|md)$' | \
+            grep -v -E '(node_modules|bin|obj|\.git|dist|build)' || true)
 
           echo ""
-          echo "After filtering:"
-          echo "$FILTERED_FILES"
+          echo "Filtered files:"
+          echo "$FILTERED"
 
-          # ✅ Output
           echo "FILES<<EOF" >> $GITHUB_OUTPUT
-          echo "$FILTERED_FILES" >> $GITHUB_OUTPUT
+          echo "$FILTERED" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+
 
       - name: Run Doc Agent
         working-directory: ${{ steps.agent_source.outputs.AGENT_ROOT }}
