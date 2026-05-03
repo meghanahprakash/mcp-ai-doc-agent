@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 
@@ -74,19 +75,30 @@ namespace DocAgent.AI
             return true;
         }
 
-        try
+        var started = false;
+        foreach (var executablePath in GetOllamaExecutableCandidates())
         {
-            var startInfo = new ProcessStartInfo
+            try
             {
-                FileName = "ollama",
-                Arguments = "serve",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = executablePath,
+                    Arguments = "serve",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
 
-            Process.Start(startInfo);
+                Process.Start(startInfo);
+                started = true;
+                break;
+            }
+            catch
+            {
+                // Keep trying next candidate path.
+            }
         }
-        catch
+
+        if (!started)
         {
             return false;
         }
@@ -115,6 +127,61 @@ namespace DocAgent.AI
         catch
         {
             return false;
+        }
+    }
+
+    private static IEnumerable<string> GetOllamaExecutableCandidates()
+    {
+        var candidates = new List<string>();
+
+        var envPath = Environment.GetEnvironmentVariable("OLLAMA_PATH");
+        if (!string.IsNullOrWhiteSpace(envPath))
+        {
+            candidates.Add(envPath);
+        }
+
+        candidates.Add("ollama");
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            AddIfExists(candidates, Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Programs", "Ollama", "ollama.exe"));
+
+            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            AddIfExists(candidates, Path.Combine(programFiles, "Ollama", "ollama.exe"));
+        }
+        else
+        {
+            AddIfExists(candidates, "/usr/local/bin/ollama");
+            AddIfExists(candidates, "/usr/bin/ollama");
+
+            var windowsUsersRoot = "/mnt/c/Users";
+            if (Directory.Exists(windowsUsersRoot))
+            {
+                try
+                {
+                    foreach (var userDir in Directory.GetDirectories(windowsUsersRoot))
+                    {
+                        var wslOllamaPath = Path.Combine(userDir, "AppData", "Local", "Programs", "Ollama", "ollama.exe");
+                        AddIfExists(candidates, wslOllamaPath);
+                    }
+                }
+                catch
+                {
+                    // Ignore directory enumeration issues.
+                }
+            }
+        }
+
+        return candidates.Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static void AddIfExists(List<string> candidates, string path)
+    {
+        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+        {
+            candidates.Add(path);
         }
     }
 }
