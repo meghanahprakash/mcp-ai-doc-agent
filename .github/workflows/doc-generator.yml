@@ -112,34 +112,41 @@ jobs:
         working-directory: caller-repo
         shell: bash
         run: |
-          set -euo pipefail
+          echo "🔍 Step started"
 
-          echo "🔍 Detecting changed files (local-safe)..."
-
-          # ✅ Never use remote branches in ACT
-          if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
-            echo "Using last commit diff"
+          # ✅ Safe fallback: always works
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            echo "Using HEAD~1 diff"
             FILES=$(git diff --name-only HEAD~1 HEAD)
           else
-            echo "First commit → using all files"
+            echo "Using full repo"
             FILES=$(git ls-files)
           fi
 
           echo "Raw files:"
           echo "$FILES"
 
-          # ✅ Filter ONLY code files
-          FILTERED=$(echo "$FILES" | grep -E '\.(cs|js|ts|py|java|json|yaml|yml|md)$' | \
-            grep -v -E '(node_modules|bin|obj|\.git|dist|build)' || true)
+          echo "Filtering..."
 
-          echo ""
+          FILTERED_FILES=""
+
+          for file in $FILES; do
+            case "$file" in
+              *.cs|*.js|*.ts|*.py|*.java|*.json|*.yml|*.yaml|*.md)
+                if [[ "$file" != node_modules/* && "$file" != bin/* && "$file" != obj/* && "$file" != .git/* ]]; then
+                  FILTERED_FILES="$FILTERED_FILES\n$file"
+                fi
+                ;;
+            esac
+          done
+
           echo "Filtered files:"
-          echo "$FILTERED"
+          echo -e "$FILTERED_FILES"
 
-          echo "FILES<<EOF" >> $GITHUB_OUTPUT
-          echo "$FILTERED" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          # ✅ safe output (NO heredoc)
+          echo "FILES=$(echo "$FILTERED_FILES" | tr '\n' ',')" >> $GITHUB_OUTPUT
 
+          echo "✅ Step completed"
 
       - name: Run Doc Agent
         working-directory: ${{ steps.agent_source.outputs.AGENT_ROOT }}
