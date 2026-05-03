@@ -113,38 +113,32 @@ jobs:
         shell: bash
         run: |
           BASE_BRANCH="${{ steps.vars.outputs.BASE_BRANCH }}"
-          GIT_REMOTE_TIMEOUT_SEC="${GIT_REMOTE_TIMEOUT_SEC:-20}"
           export GIT_TERMINAL_PROMPT=0
           export GCM_INTERACTIVE=Never
-          export GIT_HTTP_LOW_SPEED_LIMIT=1
-          export GIT_HTTP_LOW_SPEED_TIME="${GIT_REMOTE_TIMEOUT_SEC}"
 
-          run_with_timeout() {
-            if command -v timeout >/dev/null 2>&1; then
-              timeout "${GIT_REMOTE_TIMEOUT_SEC}s" "$@"
-            else
-              "$@"
-            fi
-          }
-
-          FETCH_OK=false
-          if [ "${ACT:-}" = "true" ]; then
-            echo "Running under act. Skipping remote base branch lookup and using local diff fallback."
+          # Keep this step fully local to avoid hanging on remote/network operations.
+          if git rev-parse --verify "${BASE_BRANCH}" >/dev/null 2>&1; then
+            BASE_REF="${BASE_BRANCH}"
+          elif git rev-parse --verify "origin/${BASE_BRANCH}" >/dev/null 2>&1; then
+            BASE_REF="origin/${BASE_BRANCH}"
           else
-            if run_with_timeout git ls-remote --exit-code --heads origin "${BASE_BRANCH}" >/dev/null 2>&1; then
-              if run_with_timeout git fetch --no-tags --depth=1 origin "${BASE_BRANCH}" >/dev/null 2>&1; then
-                FETCH_OK=true
-              fi
-            else
-              echo "Remote base lookup timed out or failed. Using local diff fallback."
-            fi
+            BASE_REF=""
           fi
 
-          if [ "${FETCH_OK}" = "true" ] && git rev-parse --verify "origin/${BASE_BRANCH}" >/dev/null 2>&1; then
-            CHANGED_FILES="$(git diff --name-only "origin/${BASE_BRANCH}...HEAD")"
+          if [ -n "${BASE_REF}" ]; then
+            MERGE_BASE="$(git merge-base "${BASE_REF}" HEAD 2>/dev/null || true)"
+            if [ -n "${MERGE_BASE}" ]; then
+              CHANGED_FILES="$(git diff --name-only "${MERGE_BASE}"...HEAD || true)"
+            else
+              CHANGED_FILES="$(git diff --name-only "${BASE_REF}"...HEAD || true)"
+            fi
           else
-            echo "Remote base branch not available. Using local diff fallback."
-            CHANGED_FILES="$(git diff --name-only HEAD~1...HEAD || true)"
+            echo "Local base branch not available. Using commit-range fallback."
+            if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+              CHANGED_FILES="$(git diff --name-only HEAD~1...HEAD || true)"
+            else
+              CHANGED_FILES="$(git show --pretty="" --name-only HEAD | sed '/^$/d' || true)"
+            fi
           fi
 
           echo "Changed files:"
