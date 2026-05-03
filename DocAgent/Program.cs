@@ -30,6 +30,8 @@ try
     Console.WriteLine($"🤖 Provider: {provider}");
     Console.WriteLine($"📝 Output Dir: {outputDir}");
 
+    Directory.CreateDirectory(outputDir);
+
     Console.WriteLine("📄 Changed Files:");
     foreach (var file in changedFiles)
     {
