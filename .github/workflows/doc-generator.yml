@@ -126,17 +126,27 @@ jobs:
 
       - name: Get changed files
         id: changes
+        working-directory: caller-repo
+        shell: bash
         run: |
-          BASE="${{ github.event.pull_request.base.sha }}"
-          HEAD="${{ github.event.pull_request.head.sha }}"
+          BASE="${{ github.event.pull_request.base.sha || '' }}"
+          HEAD="${{ github.event.pull_request.head.sha || '' }}"
 
-          echo "Base: $BASE"
+          if [ -z "$HEAD" ]; then
+            HEAD=$(git rev-parse HEAD)
+          fi
+
+          if [ -z "$BASE" ] && [ -n "${{ github.event.before || '' }}" ]; then
+            BASE="${{ github.event.before }}"
+          fi
+
+          echo "Base: ${BASE:-<none>}"
           echo "Head: $HEAD"
 
-          if [ -n "$BASE" ]; then
+          if [ -n "$BASE" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
             FILES=$(git diff --name-only "$BASE" "$HEAD")
           else
-            FILES=$(git show --name-only --pretty="" HEAD)
+            FILES=$(git show --name-only --pretty="" "$HEAD")
           fi
 
           echo "FILES<<EOF" >> $GITHUB_OUTPUT
