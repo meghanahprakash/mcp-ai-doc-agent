@@ -7,8 +7,7 @@ namespace DocAgent.AI
 {
     public class OllamaProvider : IAIProvider
     {
-    private const string GenerateEndpoint = "http://localhost:11434/api/generate";
-    private const string HealthEndpoint = "http://localhost:11434/api/tags";
+    private const string DefaultBaseUrl = "http://localhost:11434";
 
     private readonly HttpClient _client = new()
     {
@@ -24,53 +23,63 @@ namespace DocAgent.AI
             stream = false
         };
 
-        HttpResponseMessage response;
-        try
+        Exception? lastConnectionError = null;
+        foreach (var baseUrl in GetOllamaBaseUrls())
         {
-            response = await SendGenerateRequestAsync(body);
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
-        {
-            var autoStarted = await TryStartOllamaAsync();
-            if (autoStarted)
+            HttpResponseMessage response;
+            try
             {
+                response = await SendGenerateRequestAsync(baseUrl, body);
+                response.EnsureSuccessStatusCode();
+                var json = await response.Content.ReadAsStringAsync();
+
+                var parsed = JsonDocument.Parse(json);
+                return parsed.RootElement.GetProperty("response").GetString()
+                    ?? string.Empty;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                lastConnectionError = ex;
+
+                var autoStarted = await TryStartOllamaAsync(baseUrl);
+                if (!autoStarted)
+                {
+                    continue;
+                }
+
                 try
                 {
-                    response = await SendGenerateRequestAsync(body);
+                    response = await SendGenerateRequestAsync(baseUrl, body);
+                    response.EnsureSuccessStatusCode();
+                    var json = await response.Content.ReadAsStringAsync();
+
+                    var parsed = JsonDocument.Parse(json);
+                    return parsed.RootElement.GetProperty("response").GetString()
+                        ?? string.Empty;
                 }
                 catch (Exception retryEx) when (retryEx is HttpRequestException or TaskCanceledException)
                 {
-                    throw new InvalidOperationException(
-                        "Cannot reach Ollama at http://localhost:11434 after auto-start attempt. Ensure Ollama is installed and runnable with 'ollama serve'.",
-                        retryEx);
+                    lastConnectionError = retryEx;
                 }
-            }
-            else
-            {
-            throw new InvalidOperationException(
-                "Cannot reach Ollama at http://localhost:11434. Auto-start failed; ensure Ollama is installed and running (ollama serve).",
-                ex);
             }
         }
 
-        response.EnsureSuccessStatusCode();
-        var json = await response.Content.ReadAsStringAsync();
-
-        var parsed = JsonDocument.Parse(json);
-        return parsed.RootElement.GetProperty("response").GetString()
-            ?? string.Empty;
+        throw new InvalidOperationException(
+            "Cannot reach Ollama. Tried configured endpoints from OLLAMA_BASE_URLS/OLLAMA_BASE_URL or default http://localhost:11434. " +
+            "If running app in WSL and Ollama on Windows host, set OLLAMA_BASE_URL to a reachable host URL.",
+            lastConnectionError);
     }
 
-    private Task<HttpResponseMessage> SendGenerateRequestAsync(object body)
+    private Task<HttpResponseMessage> SendGenerateRequestAsync(string baseUrl, object body)
     {
         return _client.PostAsync(
-            GenerateEndpoint,
+            BuildEndpoint(baseUrl, "/api/generate"),
             new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json"));
     }
 
-    private async Task<bool> TryStartOllamaAsync()
+    private async Task<bool> TryStartOllamaAsync(string baseUrl)
     {
-        if (await IsOllamaReachableAsync())
+        if (await IsOllamaReachableAsync(baseUrl))
         {
             return true;
         }
@@ -106,7 +115,7 @@ namespace DocAgent.AI
         for (var i = 0; i < 10; i++)
         {
             await Task.Delay(1000);
-            if (await IsOllamaReachableAsync())
+            if (await IsOllamaReachableAsync(baseUrl))
             {
                 return true;
             }
@@ -115,19 +124,48 @@ namespace DocAgent.AI
         return false;
     }
 
-    private async Task<bool> IsOllamaReachableAsync()
+    private async Task<bool> IsOllamaReachableAsync(string baseUrl)
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
         try
         {
-            var response = await _client.GetAsync(HealthEndpoint, cts.Token);
+            var response = await _client.GetAsync(BuildEndpoint(baseUrl, "/api/tags"), cts.Token);
             return response.IsSuccessStatusCode;
         }
         catch
         {
             return false;
         }
+    }
+
+    private static IEnumerable<string> GetOllamaBaseUrls()
+    {
+        var candidates = new List<string>();
+
+        var urls = Environment.GetEnvironmentVariable("OLLAMA_BASE_URLS");
+        if (!string.IsNullOrWhiteSpace(urls))
+        {
+            candidates.AddRange(urls.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        }
+
+        var singleUrl = Environment.GetEnvironmentVariable("OLLAMA_BASE_URL");
+        if (!string.IsNullOrWhiteSpace(singleUrl))
+        {
+            candidates.Add(singleUrl);
+        }
+
+        candidates.Add(DefaultBaseUrl);
+        candidates.Add("http://127.0.0.1:11434");
+
+        return candidates
+            .Where(c => Uri.TryCreate(c, UriKind.Absolute, out _))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string BuildEndpoint(string baseUrl, string path)
+    {
+        return $"{baseUrl.TrimEnd('/')}{path}";
     }
 
     private static IEnumerable<string> GetOllamaExecutableCandidates()
