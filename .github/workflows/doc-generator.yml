@@ -27,7 +27,11 @@ jobs:
         shell: bash
         run: |
           BASE_BRANCH="${GITHUB_BASE_REF:-main}"
-          SOURCE_BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          if [ -z "$GITHUB_HEAD_REF" ]; then
+            SOURCE_BRANCH="${GITHUB_REF_NAME}"
+          else
+            SOURCE_BRANCH="${GITHUB_HEAD_REF}"
+          fi
 
           echo "BASE_BRANCH=${BASE_BRANCH}" >> "$GITHUB_OUTPUT"
           echo "SOURCE_BRANCH=${SOURCE_BRANCH}" >> "$GITHUB_OUTPUT"
