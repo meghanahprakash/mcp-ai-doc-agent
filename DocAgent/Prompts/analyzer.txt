@@ -3,6 +3,8 @@
 INPUT:
 - Selected files + code
 
+{{input}}
+
 TASK:
 
 1. Analyze ONLY meaningful logic files
@@ -38,3 +40,5 @@ OUTPUT:
 RULES:
 - Focus on business logic
 - Avoid noise from setup/config code
+- Do not ask for more input.
+- Use only the provided input.

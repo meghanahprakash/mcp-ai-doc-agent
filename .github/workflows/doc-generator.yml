@@ -203,20 +203,29 @@ jobs:
         id: commit_docs
         working-directory: caller-repo
         shell: bash
+        env:
+          GH_PUSH_TOKEN: ${{ secrets.GITHUB_TOKEN || github.token }}
         run: |
           git add docs/
 
           if git diff --cached --quiet; then
             echo "No doc changes"
             echo "no_changes=true" >> "$GITHUB_OUTPUT"
+            echo "skipped_push=true" >> "$GITHUB_OUTPUT"
           else
             git commit -m "AI-generated documentation update"
-            git push -u origin "${{ steps.branch.outputs.DOC_BRANCH }}"
+            if [ -z "${GH_PUSH_TOKEN}" ]; then
+              echo "No GitHub token available. Skipping push step."
+              echo "skipped_push=true" >> "$GITHUB_OUTPUT"
+            else
+              git push -u origin "${{ steps.branch.outputs.DOC_BRANCH }}"
+              echo "skipped_push=false" >> "$GITHUB_OUTPUT"
+            fi
             echo "no_changes=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create Pull Request
-        if: steps.commit_docs.outputs.no_changes == 'false'
+        if: steps.commit_docs.outputs.no_changes == 'false' && steps.commit_docs.outputs.skipped_push != 'true'
         working-directory: caller-repo
         shell: bash
         env:
@@ -224,6 +233,16 @@ jobs:
           DOC_BRANCH: ${{ steps.branch.outputs.DOC_BRANCH }}
           TARGET_BRANCH: ${{ steps.target.outputs.TARGET_BRANCH }}
         run: |
+          if ! command -v gh >/dev/null 2>&1; then
+            echo "GitHub CLI is not available. Skipping PR creation."
+            exit 0
+          fi
+
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "No GitHub token available. Skipping PR creation."
+            exit 0
+          fi
+
           PR_TITLE="AI Generated Docs for ${TARGET_BRANCH}"
           PR_BODY=$(cat << 'EOF'
           This PR contains automatically generated documentation.

@@ -1,12 +1,14 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using DocAgent.Utils;
 
 namespace DocAgent.AI
 {
     public class OpenAIProvider : IAIProvider
     {
     private readonly string _apiKey;
+    private static readonly string SystemPrompt = PromptLoader.LoadOptional("system-prompt") ?? string.Empty;
     private readonly HttpClient _client = new()
     {
         Timeout = TimeSpan.FromSeconds(120)
@@ -24,6 +26,7 @@ namespace DocAgent.AI
             model = "gpt-4o-mini",
             messages = new[]
             {
+                new { role = "system", content = SystemPrompt },
                 new { role = "user", content = prompt }
             },
             temperature = 0.2

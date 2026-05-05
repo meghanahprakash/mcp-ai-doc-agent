@@ -12,10 +12,13 @@ public class FeedbackAgent
         _ai = ai;
     }
 
-    public async Task<string> Refine(string doc)
+    public async Task<string> Refine(string doc, string? previousFeedback = null)
     {
         var template = PromptLoader.Load("feedback");
-        var prompt = PromptLoader.Inject(template, doc);
+        var combinedInput =
+            $"Generated Documentation:\n{doc}\n\n" +
+            $"Previous Feedback (from prior run):\n{(string.IsNullOrWhiteSpace(previousFeedback) ? "None" : previousFeedback)}";
+        var prompt = PromptLoader.Inject(template, combinedInput);
         return await _ai.GenerateAsync(prompt);
     }
 }

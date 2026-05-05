@@ -2,12 +2,14 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using DocAgent.Utils;
 
 namespace DocAgent.AI
 {
     public class OllamaProvider : IAIProvider
     {
     private const string DefaultBaseUrl = "http://localhost:11434";
+    private static readonly string SystemPrompt = PromptLoader.LoadOptional("system-prompt") ?? string.Empty;
 
     private readonly HttpClient _client = new()
     {
@@ -19,6 +21,7 @@ namespace DocAgent.AI
         var body = new
         {
             model = "llama3",
+            system = SystemPrompt,
             prompt = prompt,
             stream = false
         };

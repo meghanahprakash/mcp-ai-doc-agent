@@ -2,10 +2,14 @@ You are the Writer agent.
 
 INPUT:
 - Analyzer output
-- DOC_TYPE
+- Plan output
+- Changed file list
+- Requested document types
+
+{{input}}
 
 TASK:
-Generate clean documentation.
+Generate doc-type-specific summary content for the requested documents.
 
 STRICTLY DO NOT INCLUDE:
 - Config details
@@ -19,5 +23,29 @@ FOCUS ONLY ON:
 - API behavior
 - Component interaction
 - Execution flow
+
+OUTPUT FORMAT:
+- Return only a JSON object.
+- Do not ask questions.
+- Do not include any preamble like "please provide".
+- Do not include markdown fences.
+- Use this exact shape:
+{
+	"project_overview": "",
+	"architecture_summary": "",
+	"api_summary": "",
+	"frontend_summary": "",
+	"walkthrough_summary": "",
+	"api_operations": [""],
+	"frontend_components": [""],
+	"walkthrough_steps": [""]
+}
+
+RULES:
+- `project_overview` must be high-level and cross-project.
+- `architecture_summary` must describe system layers and responsibilities.
+- `api_summary` and `api_operations` must be empty if true backend handlers are not present.
+- `frontend_summary` and `frontend_components` must describe UI/client-side files only.
+- `walkthrough_summary` and `walkthrough_steps` must describe execution flow from relevant logic files only.
 
 (Then keep your existing doc-type blocks unchanged)

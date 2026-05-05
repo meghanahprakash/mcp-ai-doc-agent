@@ -1,0 +1,43 @@
+name: AI Doc Agent Local
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: "LLM provider to use (for example: ollama, openai)"
+        required: false
+        default: smart
+        type: string
+      caller_repository:
+        description: "Optional caller repository in owner/repo format"
+        required: false
+        default: ""
+        type: string
+      caller_ref:
+        description: "Optional caller branch/ref (for example: main)"
+        required: false
+        default: ""
+        type: string
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  call-doc-agent-dispatch:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/doc-generator.yml
+    secrets: inherit
+    with:
+      provider: ${{ github.event.inputs.provider }}
+      caller_repository: ${{ github.event.inputs.caller_repository }}
+      caller_ref: ${{ github.event.inputs.caller_ref }}
+
+  call-doc-agent-pr:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/doc-generator.yml
+    secrets: inherit
+    with:
+      provider: smart
