@@ -205,6 +205,7 @@ jobs:
         shell: bash
         env:
           GH_PUSH_TOKEN: ${{ secrets.GITHUB_TOKEN || github.token }}
+          REPO_SLUG: ${{ inputs.caller_repository != '' && inputs.caller_repository || github.repository }}
         run: |
           git add docs/
 
@@ -214,11 +215,16 @@ jobs:
             echo "skipped_push=true" >> "$GITHUB_OUTPUT"
           else
             git commit -m "AI-generated documentation update"
-            if [ -z "${GH_PUSH_TOKEN}" ]; then
+
+            if [ "${ACT:-}" = "true" ]; then
+              echo "Running in act local mode. Skipping push and PR creation."
+              echo "skipped_push=true" >> "$GITHUB_OUTPUT"
+            elif [ -z "${GH_PUSH_TOKEN}" ]; then
               echo "No GitHub token available. Skipping push step."
               echo "skipped_push=true" >> "$GITHUB_OUTPUT"
             else
-              git push -u origin "${{ steps.branch.outputs.DOC_BRANCH }}"
+              git remote set-url origin "https://x-access-token:${GH_PUSH_TOKEN}@github.com/${REPO_SLUG}.git"
+              GIT_TERMINAL_PROMPT=0 git push -u origin "${{ steps.branch.outputs.DOC_BRANCH }}"
               echo "skipped_push=false" >> "$GITHUB_OUTPUT"
             fi
             echo "no_changes=false" >> "$GITHUB_OUTPUT"
@@ -233,6 +239,11 @@ jobs:
           DOC_BRANCH: ${{ steps.branch.outputs.DOC_BRANCH }}
           TARGET_BRANCH: ${{ steps.target.outputs.TARGET_BRANCH }}
         run: |
+          if [ "${ACT:-}" = "true" ]; then
+            echo "Running in act local mode. Skipping PR creation."
+            exit 0
+          fi
+
           if ! command -v gh >/dev/null 2>&1; then
             echo "GitHub CLI is not available. Skipping PR creation."
             exit 0
