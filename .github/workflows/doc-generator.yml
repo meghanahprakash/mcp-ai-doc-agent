@@ -216,10 +216,7 @@ jobs:
           else
             git commit -m "AI-generated documentation update"
 
-            if [ "${ACT:-}" = "true" ]; then
-              echo "Running in act local mode. Skipping push and PR creation."
-              echo "skipped_push=true" >> "$GITHUB_OUTPUT"
-            elif [ -z "${GH_PUSH_TOKEN}" ]; then
+            if [ -z "${GH_PUSH_TOKEN}" ]; then
               echo "No GitHub token available. Skipping push step."
               echo "skipped_push=true" >> "$GITHUB_OUTPUT"
             else
@@ -239,11 +236,6 @@ jobs:
           DOC_BRANCH: ${{ steps.branch.outputs.DOC_BRANCH }}
           TARGET_BRANCH: ${{ steps.target.outputs.TARGET_BRANCH }}
         run: |
-          if [ "${ACT:-}" = "true" ]; then
-            echo "Running in act local mode. Skipping PR creation."
-            exit 0
-          fi
-
           if ! command -v gh >/dev/null 2>&1; then
             echo "GitHub CLI is not available. Skipping PR creation."
             exit 0
